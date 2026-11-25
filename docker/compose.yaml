@@ -1,0 +1,44 @@
+# Usage (from repo root):
+#   docker compose -f docker/compose.yaml up -d --build
+#   docker compose -f docker/compose.yaml exec dev tmux new -A -s main
+name: qwen3-tts
+
+x-host: &host
+  # Keep these identical to the host so paths & file ownership match.
+  USERNAME: ${USER:-justinshih}
+  UID: ${HOST_UID:-1007}
+  GID: ${HOST_GID:-1001}
+  REPO_DIR: ${REPO_DIR:-/home/justinshih/Warehouse/Qwen3-TTS}
+
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args: *host
+    image: qwen3-tts-dev:latest
+    container_name: qwen3-tts-dev
+    hostname: qwen3-tts
+    working_dir: ${REPO_DIR:-/home/justinshih/Warehouse/Qwen3-TTS}
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+      HF_HOME: /home/${USER:-justinshih}/.cache/huggingface
+    volumes:
+      # Repo mounted at the same path as on the host (Claude project settings/memory line up)
+      - ..:${REPO_DIR:-/home/justinshih/Warehouse/Qwen3-TTS}
+      # Share Claude Code login/settings with the host
+      - ${HOME}/.claude:/home/${USER:-justinshih}/.claude
+      # Model weights cache, downloaded once and reused
+      - ${HOME}/.cache/huggingface:/home/${USER:-justinshih}/.cache/huggingface
+    shm_size: 16gb
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    # Host has RmProfilingAdminOnly=1: Nsight Compute (ncu) needs SYS_ADMIN to read GPU counters
+    cap_add:
+      - SYS_ADMIN
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
